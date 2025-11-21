@@ -148,7 +148,7 @@ class InvoiceController extends Controller
             'paidOnInvoice' => (float)$paidOnInvoice,
         ])->render();
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-        return $pdf->download(($invoice->number ?? 'invoice').'.pdf');
+        return $pdf->download('invoice-'.$invoice->number.'.pdf');
     }
 
     public function destroy(Request $request, Invoice $invoice)

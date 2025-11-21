@@ -18,13 +18,21 @@
     @php
         $u = isset($brand) ? $brand : ($invoice->user ?? null);
         $currency = $u->currency ?? 'USD';
-        $logo = $u && $u->logo_path ? asset('storage/'.$u->logo_path) : null;
+        $logoSrc = null;
+        if ($u && $u->logo_path) {
+            $imagePath = public_path('storage/' . $u->logo_path);
+            if (file_exists($imagePath)) {
+                $imageData = base64_encode(file_get_contents($imagePath));
+                $mimeType = mime_content_type($imagePath);
+                $logoSrc = 'data:' . $mimeType . ';base64,' . $imageData;
+            }
+        }
     @endphp
     <table style="width:100%; border:0; border-collapse:separate;">
         <tr>
             <td style="border:0; vertical-align:middle;">
-                @if($logo)
-                    <img src="{{ $logo }}" alt="Logo" style="height:48px;" />
+                @if($logoSrc)
+                    <img src="{{ $logoSrc }}" alt="Logo" style="height:48px;" />
                 @endif
             </td>
             <td style="border:0; text-align:right;">
@@ -81,19 +89,19 @@
                 : (float)($invoice->due_amount ?? (($invoice->amount ?? 0) - ($invoice->advance_payment ?? 0)));
         @endphp
         <tr>
-            <td class="right"><strong>Discount:</strong></td>
-            <td class="right">{{ number_format($invoice->discount ?? 0, 2) }} {{ $currency }}</td>
-        </tr>
-        <tr>
-            <td class="right"><strong>Advance Paid (Job Card):</strong></td>
-            <td class="right">{{ number_format($invoice->advance_payment ?? 0, 2) }} {{ $currency }}</td>
-        </tr>
-        <tr>
             <td class="right"><strong>Total Amount:</strong></td>
             <td class="right">{{ number_format($invoice->amount, 2) }} {{ $currency }}</td>
         </tr>
         <tr>
-            <td class="right"><strong>Due Amount:</strong></td>
+            <td class="right"><strong>Discount:</strong></td>
+            <td class="right">{{ number_format($invoice->discount ?? 0, 2) }} {{ $currency }}</td>
+        </tr>
+        <tr>
+            <td class="right"><strong>Pay Amount:</strong></td>
+            <td class="right">{{ number_format($paidOnInv, 2) }} {{ $currency }}</td>
+        </tr>
+        <tr>
+            <td class="right"><strong>Due Balance:</strong></td>
             <td class="right">{{ number_format($dueToShow, 2) }} {{ $currency }}</td>
         </tr>
     </table>

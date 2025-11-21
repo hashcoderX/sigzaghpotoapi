@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\JobCard;
+use App\Models\JobCardTask;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
@@ -17,7 +18,7 @@ class JobCardController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = JobCard::with(['booking','items'])
+        $query = JobCard::with(['booking','items','tasks'])
             ->where('user_id', $user->id)
             ->orderByDesc('id');
         if ($status = $request->query('status')) {
@@ -58,6 +59,11 @@ class JobCardController extends Controller
             'items.*.qty' => ['required','integer','min:1'],
             'items.*.amount' => ['required','numeric','min:0'],
             'items.*.subamount' => ['required','numeric','min:0'],
+            'tasks' => ['nullable','array'],
+            'tasks.*.title' => ['required','string','max:255'],
+            'tasks.*.description' => ['nullable','string'],
+            'tasks.*.completed' => ['nullable','boolean'],
+            'tasks.*.completed_at' => ['nullable','date'],
         ]);
         Booking::where('id', $data['booking_id'])->where('user_id', $user->id)->firstOrFail();
         $data['user_id'] = $user->id;
@@ -85,6 +91,17 @@ class JobCardController extends Controller
                 ]);
             }
         }
+        if (!empty($data['tasks'])) {
+            foreach ($data['tasks'] as $task) {
+                \App\Models\JobCardTask::create([
+                    'job_card_id' => $job->id,
+                    'title' => $task['title'],
+                    'description' => $task['description'] ?? null,
+                    'completed' => $task['completed'] ?? false,
+                    'completed_at' => $task['completed_at'] ?? null,
+                ]);
+            }
+        }
         // If an advance was specified on creation, also record a Payment for it (to keep totals consistent)
         if ((float)($job->advance_payment ?? 0) > 0) {
             \App\Models\Payment::create([
@@ -100,7 +117,7 @@ class JobCardController extends Controller
                 'paid_at' => now(),
             ]);
         }
-        return response()->json($job->load(['booking','items','user']), 201);
+        return response()->json($job->load(['booking','items','tasks','user']), 201);
     }
 
     public function show(Request $request, JobCard $job_card)
@@ -128,6 +145,12 @@ class JobCardController extends Controller
             'items.*.qty' => ['required','integer','min:1'],
             'items.*.amount' => ['required','numeric','min:0'],
             'items.*.subamount' => ['required','numeric','min:0'],
+            'tasks' => ['nullable','array'],
+            'tasks.*.id' => ['nullable','integer','exists:job_card_tasks,id'],
+            'tasks.*.title' => ['required','string','max:255'],
+            'tasks.*.description' => ['nullable','string'],
+            'tasks.*.completed' => ['nullable','boolean'],
+            'tasks.*.completed_at' => ['nullable','date'],
         ]);
         if (isset($data['booking_id'])) {
             Booking::where('id', $data['booking_id'])->where('user_id', $request->user()->id)->firstOrFail();
@@ -157,6 +180,21 @@ class JobCardController extends Controller
                 ]);
             }
         }
+        if (array_key_exists('tasks', $data)) {
+            // Delete existing tasks and create new ones
+            $job_card->tasks()->delete();
+            if (!empty($data['tasks'])) {
+                foreach ($data['tasks'] as $task) {
+                    \App\Models\JobCardTask::create([
+                        'job_card_id' => $job_card->id,
+                        'title' => $task['title'],
+                        'description' => $task['description'] ?? null,
+                        'completed' => $task['completed'] ?? false,
+                        'completed_at' => $task['completed_at'] ?? null,
+                    ]);
+                }
+            }
+        }
         // If advance is newly added (previously 0), create a Payment for it (avoid duplicates if payments already exist)
         if (array_key_exists('advance_payment', $data)) {
             $newAdvance = (float)($job_card->advance_payment ?? 0);
@@ -178,7 +216,7 @@ class JobCardController extends Controller
                 }
             }
         }
-        return $job_card->load(['booking','items','user']);
+        return $job_card->load(['booking','items','tasks','user']);
     }
 
     public function destroy(Request $request, JobCard $job_card)
@@ -303,5 +341,91 @@ class JobCardController extends Controller
             }
         }
         return 'INV-'.now()->format('YmdHis');
+    }
+
+    // Task management methods
+    public function createTask(Request $request, JobCard $job_card)
+    {
+        $this->authorizeAccess($request, $job_card);
+
+        $data = $request->validate([
+            'title' => ['required','string','max:255'],
+            'description' => ['nullable','string'],
+            'completed' => ['nullable','boolean'],
+        ]);
+
+        $task = JobCardTask::create([
+            'job_card_id' => $job_card->id,
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'completed' => $data['completed'] ?? false,
+            'completed_at' => ($data['completed'] ?? false) ? now() : null,
+        ]);
+
+        return response()->json($task, 201);
+    }
+
+    public function updateTask(Request $request, JobCard $job_card, JobCardTask $task)
+    {
+        $this->authorizeAccess($request, $job_card);
+
+        // Ensure task belongs to the job card
+        if ($task->job_card_id !== $job_card->id) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'title' => ['sometimes','string','max:255'],
+            'description' => ['nullable','string'],
+            'completed' => ['sometimes','boolean'],
+        ]);
+
+        if (isset($data['completed'])) {
+            $data['completed_at'] = $data['completed'] ? now() : null;
+        }
+
+        $task->update($data);
+
+        return response()->json($task);
+    }
+
+    public function deleteTask(Request $request, JobCard $job_card, JobCardTask $task)
+    {
+        $this->authorizeAccess($request, $job_card);
+
+        // Ensure task belongs to the job card
+        if ($task->job_card_id !== $job_card->id) {
+            abort(404);
+        }
+
+        $task->delete();
+
+        return response()->json(['status' => 'deleted']);
+    }
+
+    public function toggleTask(Request $request, JobCard $job_card, JobCardTask $task)
+    {
+        $this->authorizeAccess($request, $job_card);
+
+        // Ensure task belongs to the job card
+        if ($task->job_card_id !== $job_card->id) {
+            abort(404);
+        }
+
+        $task->completed = !$task->completed;
+        $task->completed_at = $task->completed ? now() : null;
+        $task->save();
+
+        return response()->json($task);
+    }
+
+    public function getPayments(Request $request, JobCard $job_card)
+    {
+        $this->authorizeAccess($request, $job_card);
+        $payments = Payment::where('job_card_id', $job_card->id)
+            ->with(['invoice'])
+            ->orderByDesc('paid_at')
+            ->get();
+        return response()->json($payments);
     }
 }

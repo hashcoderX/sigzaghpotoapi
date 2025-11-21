@@ -218,7 +218,7 @@ class AuthController extends Controller
             $user->cover_path = $path;
         }
 
-        if ($user->isDirty()) { $user->save(); }
+        $user->save();
 
         return response()->json([
             'id' => $user->id,

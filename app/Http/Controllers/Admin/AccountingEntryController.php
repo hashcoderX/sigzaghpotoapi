@@ -11,8 +11,17 @@ class AccountingEntryController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        $expenseType = $request->query('expense_type', 'general'); // 'general' or 'job_card'
+
+        if ($expenseType === 'job_card') {
+            // Handle job card expenses
+            return app(JobCardExpenseController::class)->index($request);
+        }
+
+        // Handle general accounting entries
         $query = AccountingEntry::where('user_id', $user->id)
             ->orderByDesc('date');
+
         if ($search = $request->query('q')) {
             $query->where(function ($q2) use ($search) {
                 $q2->where('type', 'like', "%$search%")
@@ -20,6 +29,7 @@ class AccountingEntryController extends Controller
                    ->orWhere('notes', 'like', "%$search%");
             });
         }
+
         return $query->paginate((int) $request->query('per_page', 10));
     }
 

@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\AccountingEntryController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\Admin\SuperAdminController;
+use App\Http\Controllers\Admin\JobCardExpenseController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -51,11 +52,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('job-cards', JobCardController::class);
         Route::get('job-cards/{job_card}/pdf', [JobCardController::class, 'pdf']);
         Route::post('job-cards/{job_card}/invoice', [JobCardController::class, 'createInvoice']);
+        Route::get('job-cards/{job_card}/payments', [JobCardController::class, 'getPayments']);
+        // Task management routes
+        Route::post('job-cards/{job_card}/tasks', [JobCardController::class, 'createTask']);
+        Route::patch('job-cards/{job_card}/tasks/{task}', [JobCardController::class, 'updateTask']);
+        Route::delete('job-cards/{job_card}/tasks/{task}', [JobCardController::class, 'deleteTask']);
+        Route::patch('job-cards/{job_card}/tasks/{task}/toggle', [JobCardController::class, 'toggleTask']);
         Route::apiResource('reminders', ReminderController::class);
         Route::get('reminders/sent-today', [ReminderController::class, 'sentToday']);
         Route::apiResource('invoices', InvoiceController::class);
         Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf']);
         Route::apiResource('accounting', AccountingEntryController::class);
+        Route::apiResource('job-card-expenses', JobCardExpenseController::class);
+        Route::get('job-card-expenses/job-cards/{jobCard}/summary', [JobCardExpenseController::class, 'getJobCardSummary']);
+        Route::get('job-card-expenses/event-types', [JobCardExpenseController::class, 'getEventTypes']);
         // Users & Privileges management
         Route::get('users', [UsersController::class, 'index']);
         Route::post('users', [UsersController::class, 'store']);

@@ -20,6 +20,14 @@
     @php
         $user = $job->user;
         $currency = $user->currency ?? 'USD';
+        $logoSrc = null;
+        if ($user && $user->logo_path) {
+            $logoPath = storage_path('app/public/' . $user->logo_path);
+            if (file_exists($logoPath)) {
+                $logoData = file_get_contents($logoPath);
+                $logoSrc = 'data:' . mime_content_type($logoPath) . ';base64,' . base64_encode($logoData);
+            }
+        }
         $final = (float) ($job->confirmed_amount ?? 0);
         // Prefer sum of paid payments; fallback to advance_payment
         $paid = (float) \App\Models\Payment::where('job_card_id', $job->id)->where('status','paid')->sum('amount');
@@ -27,18 +35,27 @@
         $due = max(0, $final - $paid);
     @endphp
 
-    <h3>{{ $user->name }}</h3>
-    @if($user->address)
-        <div>{{ $user->address }}</div>
-    @endif
-    <div>
-        @if($user->phone) <span><strong>Phone:</strong> {{ $user->phone }}</span> @endif
-        @if($user->whatsapp) <span style="margin-left:12px;"><strong>WhatsApp:</strong> {{ $user->whatsapp }}</span> @endif
-    </div>
-    <div>
-        @if($user->website) <span><strong>Website:</strong> {{ $user->website }}</span> @endif
-        @if($user->email) <span style="margin-left:12px;"><strong>Email:</strong> {{ $user->email }}</span> @endif
-    </div>
+    <table style="width:100%; border:0; border-collapse:separate;">
+        <tr>
+            <td style="border:0; vertical-align:middle;">
+                @if($logoSrc)
+                    <img src="{{ $logoSrc }}" alt="Logo" style="height:48px;" />
+                @endif
+            </td>
+            <td style="border:0; text-align:right;">
+                <div style="font-weight:bold; font-size:14px;">{{ $user->name }}</div>
+                @if($user->address)
+                    <div style="color:#666; font-size:11px;">{{ $user->address }}</div>
+                @endif
+                <div style="color:#666; font-size:11px;">
+                    @if($user->phone) <span>Phone: {{ $user->phone }}</span> @endif
+                    @if($user->whatsapp) <span style="margin-left:8px;">WhatsApp: {{ $user->whatsapp }}</span> @endif
+                    @if($user->email) <span style="margin-left:8px;">Email: {{ $user->email }}</span> @endif
+                    @if($user->website) <span style="margin-left:8px;">Website: {{ $user->website }}</span> @endif
+                </div>
+            </td>
+        </tr>
+    </table>
 
     <div class="section">
         <h1>Job Card #{{ $job->id }}</h1>

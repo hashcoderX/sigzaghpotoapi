@@ -32,4 +32,6 @@ class JobCard extends Model
     public function user() { return $this->belongsTo(User::class); }
     public function booking() { return $this->belongsTo(Booking::class); }
     public function items() { return $this->hasMany(JobCardItem::class); }
+    public function tasks() { return $this->hasMany(JobCardTask::class); }
+    public function expenses() { return $this->hasMany(JobCardExpense::class); }
 }

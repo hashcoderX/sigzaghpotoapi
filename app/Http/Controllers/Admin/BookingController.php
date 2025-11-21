@@ -36,6 +36,18 @@ class BookingController extends Controller
             'location' => ['nullable','string','max:255'],
             'status' => ['nullable','string','in:scheduled,completed,cancelled'],
             'notes' => ['nullable','string'],
+            'wedding_shoot_date' => ['nullable','date'],
+            'preshoot_date' => ['nullable','date'],
+            'homecoming_date' => ['nullable','date'],
+            'function_date' => ['nullable','date'],
+            'event_covering_date' => ['nullable','date'],
+            'custom_plan_date' => ['nullable','date'],
+            'wedding_shoot_location' => ['nullable','string','max:255'],
+            'preshoot_location' => ['nullable','string','max:255'],
+            'homecoming_location' => ['nullable','string','max:255'],
+            'function_location' => ['nullable','string','max:255'],
+            'event_covering_location' => ['nullable','string','max:255'],
+            'custom_plan_location' => ['nullable','string','max:255'],
         ]);
         // Ensure the customer belongs to user
         $customer = Customer::where('id', $data['customer_id'])->where('user_id', $user->id)->firstOrFail();
@@ -59,6 +71,18 @@ class BookingController extends Controller
             'location' => ['nullable','string','max:255'],
             'status' => ['nullable','string','in:scheduled,completed,cancelled'],
             'notes' => ['nullable','string'],
+            'wedding_shoot_date' => ['nullable','date'],
+            'preshoot_date' => ['nullable','date'],
+            'homecoming_date' => ['nullable','date'],
+            'function_date' => ['nullable','date'],
+            'event_covering_date' => ['nullable','date'],
+            'custom_plan_date' => ['nullable','date'],
+            'wedding_shoot_location' => ['nullable','string','max:255'],
+            'preshoot_location' => ['nullable','string','max:255'],
+            'homecoming_location' => ['nullable','string','max:255'],
+            'function_location' => ['nullable','string','max:255'],
+            'event_covering_location' => ['nullable','string','max:255'],
+            'custom_plan_location' => ['nullable','string','max:255'],
         ]);
         if (isset($data['customer_id'])) {
             $user = $request->user();
@@ -88,13 +112,48 @@ class BookingController extends Controller
             'end' => ['required','date','after_or_equal:start'],
         ]);
 
-        $items = Booking::with('customer')
+        $bookings = Booking::with('customer')
             ->where('user_id', $user->id)
-            ->whereBetween('event_date', [$start, $end])
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('event_date', [$start, $end])
+                  ->orWhereBetween('wedding_shoot_date', [$start, $end])
+                  ->orWhereBetween('preshoot_date', [$start, $end])
+                  ->orWhereBetween('homecoming_date', [$start, $end])
+                  ->orWhereBetween('function_date', [$start, $end])
+                  ->orWhereBetween('event_covering_date', [$start, $end])
+                  ->orWhereBetween('custom_plan_date', [$start, $end]);
+            })
             ->orderBy('event_date', 'asc')
             ->get();
 
-        return response()->json($items);
+        $events = [];
+        foreach ($bookings as $booking) {
+            $dates = [
+                'event_date' => ['Wedding Shoot', 'wedding_shoot_location'],
+                'wedding_shoot_date' => ['Wedding Shoot', 'wedding_shoot_location'],
+                'preshoot_date' => ['Preshoot Day', 'preshoot_location'],
+                'homecoming_date' => ['Home Coming Day Shoot', 'homecoming_location'],
+                'function_date' => ['Function', 'function_location'],
+                'event_covering_date' => ['Event Covering', 'event_covering_location'],
+                'custom_plan_date' => ['Custom Plan', 'custom_plan_location'],
+            ];
+            foreach ($dates as $field => $info) {
+                if ($booking->$field && $booking->$field >= $start && $booking->$field <= $end) {
+                    $location = $booking->{$info[1]} ? ' @ ' . $booking->{$info[1]} : '';
+                    $events[] = [
+                        'id' => $booking->id . '_' . $field,
+                        'booking_id' => $booking->id,
+                        'title' => ($booking->customer?->name ? $booking->customer->name : '#'.$booking->customer_id) . ' — ' . $info[0] . ' (' . $booking->status . ')' . $location,
+                        'start' => $booking->$field->toISOString(),
+                        'end' => $booking->$field->copy()->addHours(1)->toISOString(),
+                        'resource' => $booking->toArray(),
+                        'type' => $field,
+                    ];
+                }
+            }
+        }
+
+        return response()->json($events);
     }
 
     private function authorizeAccess(Request $request, Booking $booking): void
